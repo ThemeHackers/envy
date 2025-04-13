@@ -35,15 +35,5 @@ Show all possible matches:
 python envy.py "C:\path\to\analyze" --all
 ```
 
-## Requirements
-
-- Python 3.6+
-- colorama
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request. 
+## Credit
+- https://www.youtube.com/watch?v=WJlqQYyzGi8&t=1117s
