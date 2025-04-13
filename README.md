@@ -1,4 +1,4 @@
-# ENVY - Environment Variable Path Analyzer
+# ENVY - Environment Variable Path Analyzer by ThemeHackers
 
 ENVY is a Python tool that helps analyze and generate environment variable-based paths and glob patterns. It's particularly useful for finding the most efficient way to reference files and directories using environment variables.
 
