@@ -9,6 +9,8 @@ from concurrent.futures import ThreadPoolExecutor
 import time
 import argparse
 from colorama import init, Fore, Style, Back
+import sys
+from tqdm import tqdm
 
 # Initialize colorama
 init()
@@ -89,25 +91,50 @@ def process_glob_mutations(env, remaining_part, each_part, base_path, full_path)
     return question_mark_mutations + star_mutation_matches
 
 def print_header(text):
-    print(f"\n{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}{text:^80}{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}\n")
+    width = 80
+    print(f"\n{Fore.CYAN}{'╔' + '═' * (width-2) + '╗'}{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}║{text:^{width-2}}║{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}{'╚' + '═' * (width-2) + '╝'}{Style.RESET_ALL}\n")
 
 def print_section(text):
-    print(f"\n{Fore.YELLOW}{text}{Style.RESET_ALL}")
-    print(f"{Fore.YELLOW}{'-' * len(text)}{Style.RESET_ALL}")
+    width = 80
+    print(f"\n{Fore.YELLOW}{'╭' + '─' * (width-2) + '╮'}{Style.RESET_ALL}")
+    print(f"{Fore.YELLOW}│ {text}{' ' * (width-4-len(text))}│{Style.RESET_ALL}")
+    print(f"{Fore.YELLOW}{'╰' + '─' * (width-2) + '╯'}{Style.RESET_ALL}")
 
 def print_path(path):
     parts = path.split(os.path.sep)
     colored_parts = []
     for part in parts:
         if part.startswith("$env:"):
-            colored_parts.append(f"{Fore.GREEN}{part}{Style.RESET_ALL}")
+            colored_parts.append(f"{Fore.GREEN}{Back.BLACK}{part}{Style.RESET_ALL}")
         elif "*" in part or "?" in part:
-            colored_parts.append(f"{Fore.MAGENTA}{part}{Style.RESET_ALL}")
+            colored_parts.append(f"{Fore.MAGENTA}{Back.BLACK}{part}{Style.RESET_ALL}")
         else:
-            colored_parts.append(part)
-    return os.path.sep.join(colored_parts)
+            colored_parts.append(f"{Fore.WHITE}{Back.BLACK}{part}{Style.RESET_ALL}")
+    return f"{Fore.WHITE}{Back.BLACK}{os.path.sep.join(colored_parts)}{Style.RESET_ALL}"
+
+def print_progress(text):
+    sys.stdout.write(f"\r{Fore.YELLOW}⏳ {text}{' ' * 20}{Style.RESET_ALL}")
+    sys.stdout.flush()
+
+def print_success(text):
+    print(f"{Fore.GREEN}✓ {text}{Style.RESET_ALL}")
+
+def print_error(text):
+    print(f"{Fore.RED}✗ {text}{Style.RESET_ALL}")
+
+def print_info(text):
+    print(f"{Fore.BLUE}ℹ {text}{Style.RESET_ALL}")
+
+def print_summary_box(title, content):
+    width = 80
+    print(f"\n{Fore.CYAN}{'╔' + '═' * (width-2) + '╗'}{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}║ {title}{' ' * (width-4-len(title))}║{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}{'╠' + '═' * (width-2) + '╣'}{Style.RESET_ALL}")
+    for line in content:
+        print(f"{Fore.CYAN}║ {line}{' ' * (width-4-len(line))}║{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}{'╚' + '═' * (width-2) + '╝'}{Style.RESET_ALL}\n")
 
 def main():
     global glob_cache, args
@@ -118,12 +145,12 @@ def main():
     target_path = pathlib.Path(target_norm_str)
     
     if not target_path.is_absolute():
-        print(f"{Fore.RED}[!] Error: Absolute path required{Style.RESET_ALL}")
+        print_error("Absolute path required")
         return
         
     print_header("ENVY - Environment Variable Path Analyzer")
     print_section("Analyzing Path")
-    print(f"Target path: {Fore.BLUE}{target}{Style.RESET_ALL}")
+    print_info(f"Target path: {target}")
     
     env_score = {}
     target_parts = path_parts(target_norm_str)
@@ -133,6 +160,8 @@ def main():
                 if os.path.exists(v) and os.path.isdir(v)}
     
     print_section("Processing Environment Variables")
+    print_progress("Scanning environment variables...")
+    
     # Score environment variables in parallel
     with ThreadPoolExecutor() as executor:
         futures = []
@@ -147,14 +176,18 @@ def main():
                 env_score[env_key] = score
     
     if not env_score:
-        print(f"{Fore.RED}[!] No matching environment variables found{Style.RESET_ALL}")
+        print_error("No matching environment variables found")
         return
         
     highest_score_env = max(env_score, key=env_score.get)
     highest_score_value = env_score[highest_score_env]
     best_envs = [key for key, value in env_score.items() if value == highest_score_value]
 
+    print_success(f"Found {len(best_envs)} matching environment variables")
+    
     print_section("Generating Path Patterns")
+    print_progress("Processing environment matches...")
+    
     # Process environment matches in parallel
     with ThreadPoolExecutor() as executor:
         futures = []
@@ -169,7 +202,7 @@ def main():
     env_parts = path_parts(env)
     left_over_parts = target_parts[len(env_parts):]
     
-    print(f"{Fore.YELLOW}Caching subdirectories...{Style.RESET_ALL}")
+    print_progress("Caching subdirectories...")
     # Pre-cache glob results
     with ThreadPoolExecutor() as executor:
         futures = []
@@ -181,7 +214,7 @@ def main():
             map_path = os.path.join(env, os.path.sep.join(left_over_parts[:i]))
             glob_cache[map_path] = future.result()
     
-    print(f"{Fore.YELLOW}Finding glob patterns for '{target}'...{Style.RESET_ALL}")
+    print_progress(f"Finding glob patterns for '{target}'...")
     # Process glob mutations in parallel
     with ThreadPoolExecutor() as executor:
         futures = []
@@ -211,7 +244,16 @@ def main():
                         shortest = len(new_option)
     
     end_time = time.time()
-    print(f"\n{Fore.CYAN}Execution time: {end_time - start_time:.2f} seconds{Style.RESET_ALL}")
+    execution_time = end_time - start_time
+    
+    summary_content = [
+        f"Target Path: {target}",
+        f"Execution Time: {execution_time:.2f} seconds",
+        f"Environment Variables Found: {len(best_envs)}",
+        f"Shortest Path Length: {shortest} characters"
+    ]
+    
+    print_summary_box("Analysis Summary", summary_content)
 
 def process_env_score(env_key, value_path_parts, target_parts):
     score = 0
